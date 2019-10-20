@@ -136,7 +136,7 @@ class TranslationDetails(Resource):
 
     def get(self, term_id, trans_id):
         terminology = TerminologyView.objects(id=term_id).first()
-        for tans in terminology.translations:
+        for trans in terminology.translations:
             if trans.id == trans_id:
                 return jsonify(trans)
         

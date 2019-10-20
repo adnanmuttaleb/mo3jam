@@ -1,7 +1,4 @@
-from collections import namedtuple
-
 from eventsourcing.domain.model.aggregate import BaseAggregateRoot
-from eventsourcing.domain.model.decorators import attribute
 
 class ValueObject():
     

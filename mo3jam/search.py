@@ -1,6 +1,5 @@
 from flask import current_app
 from elasticsearch.helpers import bulk
-from . import mongo_db
 
 def add_to_index(index, model):
     if not current_app.elasticsearch:

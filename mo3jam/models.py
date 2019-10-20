@@ -5,7 +5,7 @@ import uuid
 from mongoengine import signals
 from eventsourcing.domain.model.decorators import subscribe_to
 
-from . import mongo_db, db
+from . import mongo_db
 from .search import add_to_index, remove_from_index, query_index, bulk_add_to_index
 from .entities import Terminology, Domain
 
