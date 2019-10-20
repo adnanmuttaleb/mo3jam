@@ -22,8 +22,5 @@ jobs:
           name: run tests
           command: |
             . venv/bin/activate
-<<<<<<< HEAD
             # flake8 --exclude=venv* --statistics
-=======
->>>>>>> 15151b7cb3136a9e1bea894654822e9e3054d96f
             pytest -v
