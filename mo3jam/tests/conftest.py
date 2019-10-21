@@ -75,3 +75,18 @@ def terminology(test_client, request, user, domain):
 
     term.__save__()
     return term
+
+
+@pytest.fixture(params=[
+    'some translation',
+    '',
+])
+def translation(request, user, dictionary, ):
+    return Translation(
+        id=None,
+        value=request.param,
+        creator=user.id,
+        author= dictionary.id,
+        creation_date=None,
+        notes='Some Note'
+    )

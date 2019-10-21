@@ -37,4 +37,36 @@ def test_terminologies_put(test_client, terminology, domain):
     assert reponse.status_code == 200
 
 
+def test_translations_post(test_client, terminology, translation):
+    reponse = test_client.post(
+        'api/v1.0/terminologies/{!s}/translations'.format(terminology.id.hex),
+        json={
+            'value': translation.value,
+            'creator': translation.creator,
+            'author': translation.author,
+            'notes': translation.notes
+
+        },
+        follow_redirects=True,
+    )
+
+    assert reponse.status_code == 200
+
+
+def test_translations_put(test_client, terminology, translation):
+
+    reponse = test_client.post(
+        'api/v1.0/terminologies/{!s}/translations'.format(terminology.id.hex),
+        json={
+            'value': translation.value,
+            'creator': translation.creator,
+            'author': translation.author,
+            'notes': translation.notes
+
+        },
+        follow_redirects=True,
+    )
+
+    assert reponse.status_code == 200
+
 

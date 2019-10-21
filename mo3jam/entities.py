@@ -54,12 +54,12 @@ class Terminology(BaseAggregateRoot):
 
     class TranslationUpdated(Event):
 
+        def update(self, translation):
+            translation.__dict__.update(self.data)
+            return translation
+
         def mutate(self, obj):
-            obj.translations = tuple(
-                trans if trans.id != self.modified_translation.id 
-                else self.modified_translation
-                for trans in obj.translations
-            )
+            obj.translations = tuple(trans if trans.id != self.translation_id else self.update(trans) for trans in obj.translations)
         
     def add_translation(self, translation):
         self.__trigger_event__(Terminology.TranslationAdded, translation=translation) 
@@ -67,8 +67,12 @@ class Terminology(BaseAggregateRoot):
     def delete_translation(self, translation_id):
         self.__trigger_event__(Terminology.TranslationDeleted, translation_id=translation_id) 
 
-    def update_translation(self, translation):
-        self.__trigger_event__(Terminology.TranslationUpdated, modified_translation=translation) 
+    def update_translation(self, translation_id, data):
+        self.__trigger_event__(
+            Terminology.TranslationUpdated, 
+            translation_id=translation_id,
+            data=data,
+        ) 
     
     def set_domain(self, domain):
         self.__trigger_event__(Terminology.DomainSet, domain=domain)

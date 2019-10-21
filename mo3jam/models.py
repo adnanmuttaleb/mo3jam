@@ -83,8 +83,6 @@ class DomainView(mongo_db.Document, SearchableMixin):
     description = mongo_db.StringField(max_length=2000)
     creator = mongo_db.ReferenceField(UserView)
     creation_date = mongo_db.DateTimeField()
-    terminologies =  mongo_db.ListField(mongo_db.ReferenceField(TerminologyView))
-
 
 
 @subscribe_to(
@@ -113,23 +111,16 @@ def _(event):
         creation_date=event.creation_date,
         
     )
+
+
     terminology.save()
 
 @consume.register(Terminology.DomainSet)
 def _(event):
     terminology = TerminologyView.objects.get(id=event.originator_id)
-    try:
-        terminology.domain.update(
-            pull__terminologies=terminology
-        )
-    except Exception:
-        pass
-
     domain = DomainView.objects.get(id=event.domain)
     terminology.update(domain=domain)
-    domain.update(
-        push__terminologies=terminology
-    )
+
 
 @consume.register(Terminology.TranslationAdded,)
 def _(event):
@@ -170,19 +161,19 @@ def _(event):
 @consume.register(Terminology.TranslationUpdated,)
 def _(event):
     try:
-        trans_id = uuid.UUID(event.modified_translation.id)
+        trans_id = uuid.UUID(event.translation_id)
     except Exception:
-        trans_id = event.modified_translation.id
+        trans_id = event.translation_id
     
-    TerminologyView.objects(
-        id=event.originator_id, 
-        translations__id=trans_id
-    ).update(
-            set__translations__S__value=event.modified_translation.value ,
-            set__translations__S__notes=event.modified_translation.notes ,
-            set__translations__S__author=DictionaryView.objects(id=event.modified_translation.author).first() or \
-                                        UserView.objects(id=event.modified_translation.author).first()
-    )      
+    update_data = dict(event.data)
+    update_data['author'] = DictionaryView.objects(id=update_data['author']).first() or \
+                            UserView.objects(id=update_data['author']).first()
+
+    terminology = TerminologyView.objects.get(id=event.originator_id)
+    terminology.translations.filter(id=trans_id).update(
+        **update_data,     
+    )
+    terminology.save()
 
 
 @consume.register(Terminology.Discarded)

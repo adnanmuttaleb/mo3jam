@@ -107,7 +107,7 @@ class TranslationsList(Resource):
         terminology = app.example_repository[uuid.UUID(term_id)]
 
         value = request.json['value']
-        notes = request.json['notes']
+        notes = request.json.get('notes', '')
         author_id = uuid.UUID(request.json['author'])
         creator_id = uuid.UUID(request.json['creator'])
 
@@ -147,22 +147,26 @@ class TranslationDetails(Resource):
         
         app = get_example_application()
         terminology = app.example_repository[uuid.UUID(term_id)]
-        
+        data = {}
+
         value = request.json.get('value')
         notes = request.json.get('notes')
-        author_id = uuid.UUID(request.json['author'])
-
-        author = DictionaryView.objects.get(id=author_id) or UserView.objects.get(id=author_id) 
         
-        translation = Translation(
-            id =uuid.UUID(trans_id),
-            author=author.id,
-            notes=notes,
-            creator=None,
-            value=value
-        )        
+        try:
+            author_id = uuid.UUID(request.json.get('author'))
+            author = DictionaryView.objects.get(id=author_id) or UserView.objects.get(id=author_id) 
+        except Exception:
+            author = None
 
-        terminology.update_translation(translation)
+        if value:
+            data['value'] = value
+        if notes:
+            data['notes'] = notes
+        if author:
+            data['author'] = author.id
+
+
+        terminology.update_translation(uuid.UUID(trans_id), data)
         terminology.__save__()
 
         return '', 200
