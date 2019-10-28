@@ -53,10 +53,15 @@ def test_translations_post(test_client, terminology, translation):
     assert reponse.status_code == 200
 
 
-def test_translations_put(test_client, terminology, translation):
+def test_translations_put(test_client, terminology):
 
-    reponse = test_client.post(
-        'api/v1.0/terminologies/{!s}/translations'.format(terminology.id.hex),
+    terminology_obj = TerminologyView.objects.get(id=terminology.id)
+    translation_obj = terminology_obj.translations[0]
+    reponse = test_client.put(
+        'api/v1.0/terminologies/{!s}/translations/{!s}'.format(
+            terminology.id.hex, 
+            translation_obj.id.hex
+        ),
         json={
             'value': translation.value,
             'creator': translation.creator,

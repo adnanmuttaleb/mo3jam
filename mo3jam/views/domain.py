@@ -7,29 +7,34 @@ from eventsourcing.example.application import (
 )
 
 from flask import request, jsonify, abort, current_app
-from flask_restplus import Resource, fields
+from flask_restplus import Resource
+from flask_restplus.marshalling import marshal, marshal_with
 
 from .. import api
 from ..entities import *
 from ..models import TerminologyView, DomainView, UserView
-
+from .serializers import domain_fields, user_fields
+from .utils import get_pagination_urls
 
 domain_ns = api.namespace('domains', description='Domain Endpoint',)
-
-domain_fields = domain_ns.model('Domain', {
-    "name": fields.String,
-    "creator": fields.String,
-    "description": fields.String,
-})
 
 @domain_ns.route('/')
 class DomainList(Resource):
     
     def get(self):
-        queryset = DomainView.objects
-        return jsonify(queryset)
+        response = {}
+        page = request.args.get('page', 1)
+        page_size = request.args.get('page_size', current_app.config['RESULTS_PER_PAGE']) 
+        queryset = list(DomainView.objects[(page-1)*page_size:page*page_size])
+        response['domains'] = marshal(
+            queryset,
+            domain_fields,
+        )
+        response.update(get_pagination_urls(queryset, page, page_size))
+        return response
+
     
-    @domain_ns.expect(domain_fields, validate=True)
+    @domain_ns.expect(domain_fields,)
     def post(self):
         
         name = request.json['name']
@@ -55,12 +60,12 @@ class DomainList(Resource):
     "domain_id": "Domain ID"
 })
 class DomainDetails(Resource):
-
+    
+    @marshal_with(domain_fields)
     def get(self, domain_id):
-        domain = DomainView.objects.get_or_404(id=domain_id)
-        return jsonify(domain)
+        return DomainView.objects.get_or_404(id=domain_id)
 
-    @domain_ns.expect(domain_fields, validate=True)
+    @domain_ns.expect(domain_fields)
     def put(sef, domain_id):
         
         app = get_example_application()

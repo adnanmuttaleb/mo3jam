@@ -1,25 +1,44 @@
 from sqlalchemy_utils import UUIDType
 from flask import Flask
 from flask_restplus import Api
+
 from eventsourcing.example.application import (
     init_example_application
 )
+
 from eventsourcing.infrastructure.sqlalchemy.manager import (
     SQLAlchemyRecordManager,
 )
+
+from flask_security import Security, MongoEngineUserDatastore
+from flask_admin import Admin
+from flask_admin.contrib.mongoengine import ModelView
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_mongoengine import MongoEngine
 from elasticsearch import Elasticsearch
+
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+
+sentry_sdk.init(
+    dsn="https://279b767a15ac40dc9ef3aee616d79adb@sentry.io/1797633",
+    integrations=[FlaskIntegration()]
+)
 
 db = SQLAlchemy()
 mongo_db = MongoEngine()
 migrate = Migrate()
 
 api = Api(title='Mo3jam API', version="1.0", doc='/docs', prefix='/api/v1.0')
+admin = Admin(name='microblog', template_mode='bootstrap3')
 
 from .views import *
+from .models import UserView, Role
 
+user_datastore = MongoEngineUserDatastore(mongo_db, UserView, Role)
+security = Security()
 
 class IntegerSequencedItem(db.Model):
     __tablename__ = 'integer_sequenced_items'
@@ -53,6 +72,11 @@ def create_app(test_config=None):
     migrate.init_app(app, db)
     mongo_db.init_app(app)
     api.init_app(app)
+    security.init_app(app, user_datastore)
+    admin.init_app(app)
+
+    admin.add_view(ModelView(UserView, mongo_db))
+    admin.add_view(ModelView(Role, mongo_db))
 
     @app.before_first_request
     def before_first_request():
@@ -63,6 +87,6 @@ def create_app(test_config=None):
             ),
 
         )
-    
+
     return app
     

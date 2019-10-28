@@ -18,10 +18,11 @@ class Translation(ValueObject):
 
 class Terminology(BaseAggregateRoot):
     
-    def __init__(self, term, domain, creator, creation_date, *args, translations=None, **kwargs):
+    def __init__(self, term, domain, creator, creation_date, *args, language='en', translations=None, **kwargs):
         super(Terminology, self).__init__(*args, **kwargs)
         self.term = term
         self.domain = domain
+        self.language = language
         self.creator = creator
         self.creation_date = creation_date
         if not translations:
@@ -41,6 +42,10 @@ class Terminology(BaseAggregateRoot):
     class DomainSet(Event):
         def mutate(self, obj):
             obj.domain = self.domain  
+    
+    class LanguageChanged(Event):
+        def mutate(self, obj):
+            obj.language = self.language  
 
     class TranslationAdded(Event):
         def mutate(self, obj):
@@ -77,6 +82,9 @@ class Terminology(BaseAggregateRoot):
     def set_domain(self, domain):
         self.__trigger_event__(Terminology.DomainSet, domain=domain)
     
+    def change_language(self, language):
+        self.__trigger_event__(Terminology.LanguageChanged, language=language)
+
 
 class Domain(BaseAggregateRoot):
 

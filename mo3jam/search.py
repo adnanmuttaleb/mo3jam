@@ -4,7 +4,7 @@ from elasticsearch.helpers import bulk
 def add_to_index(index, model):
     if not current_app.elasticsearch:
         return
-    payload = model.to_dict()
+    payload = model.to_representation()
     current_app.elasticsearch.index(index=index, id=model.id, body=payload)
 
 def bulk_add_to_index(index, models):
@@ -12,12 +12,14 @@ def bulk_add_to_index(index, models):
     if not current_app.elasticsearch:
         return
 
-    # where is the ids??!!     
-    payload = ({
+    payload = (
+        {
         "_index": index, 
         "_type": "_doc", 
         "_id": model.id, 
-        "doc": model.to_dict()} for model in models)
+        "doc": model.to_representation()
+        } for model in models
+    )
    
     bulk(current_app.elasticsearch,  payload)
 

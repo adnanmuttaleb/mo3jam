@@ -1,9 +1,12 @@
 import functools
 import json
 import uuid
+import six
 
 from mongoengine import signals
 from eventsourcing.domain.model.decorators import subscribe_to
+
+from flask_security import UserMixin, RoleMixin
 
 from . import mongo_db
 from .search import add_to_index, remove_from_index, query_index, bulk_add_to_index
@@ -29,20 +32,57 @@ class SearchableMixin():
     def reindex(cls):
         bulk_add_to_index(cls.__indexname__, cls.objects)
 
-class DictionaryView(mongo_db.Document):
-    __indexname__ = 'dictionaries'
-    __searchable__ = ['author', 'title', 'publication_date']
+    def to_representation(self):
+        return self.__class__._to_representation(self)
+    
+    @classmethod
+    def _to_representation(cls, obj):
+        if not hasattr(obj, '__searchable__'):
+            try:
+                if isinstance(obj, six.string_types):
+                    raise Exception
+                return [cls._to_representation(x) for x in obj]
+            except Exception as e:
+                return obj
+
+        representation = {}
+        for key in obj.__searchable__:
+            representation[key] = cls._to_representation(obj[key])
+
+        return representation
+
+
+def register_signals(cls):
+    signals.post_save.connect(cls.post_save, sender=cls)
+    signals.post_delete.connect(cls.post_delete, sender=cls)
+    return cls
+
+
+class DictionaryView(mongo_db.Document,):
+    __searchable__ = ['author', 'title',]
     id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
     author = mongo_db.StringField(max_length=400,)
     title = mongo_db.StringField(max_length=200, required=True)
     publication_date = mongo_db.DateTimeField()
 
-class UserView(mongo_db.Document):
+class Role(mongo_db.Document, RoleMixin):
+    name = mongo_db.StringField(max_length=80, unique=True)
+    description = mongo_db.StringField(max_length=255)
+
+
+@register_signals
+class UserView(mongo_db.Document, UserMixin, SearchableMixin):
     __indexname__ = 'users'
-    __searchable__ = ['username', 'email']
+    __searchable__ = ['username']
+  
     id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
     username = mongo_db.StringField(max_length=30, required=True)
     email = mongo_db.EmailField(required=True)
+    password = mongo_db.StringField(max_length=255)
+    active = mongo_db.BooleanField(default=True)
+    confirmed_at = mongo_db.DateTimeField()
+    roles = mongo_db.ListField(mongo_db.ReferenceField(Role), default=[])
+
 
 class TranslationView(mongo_db.EmbeddedDocument):
     __searchable__ = ['value']
@@ -54,26 +94,22 @@ class TranslationView(mongo_db.EmbeddedDocument):
     creation_date = mongo_db.DateTimeField()
     notes = mongo_db.StringField(max_length=2000, required=True)
 
+
+@register_signals
 class TerminologyView(mongo_db.Document, SearchableMixin):
     __indexname__ = 'terminologies'
-    __searchable__ = ['id', 'term', 'translations', 'notes']
+    __searchable__ = ['term', 'creation_date', 'creator', 'translations', 'language', 'notes']
 
     id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
     term = mongo_db.StringField(max_length=300, required=False, unique=True, sparse=True)
+    language = mongo_db.StringField(max_length=30, required=False, default='en')
     translations = mongo_db.EmbeddedDocumentListField(TranslationView, required=False)
     notes = mongo_db.ListField(mongo_db.StringField(max_length=2000), required=False)
     domain = mongo_db.ReferenceField('DomainView', required=True)
     creator = mongo_db.ReferenceField(UserView)
     creation_date = mongo_db.DateTimeField()
 
-
-    def to_dict(self):
-        as_json = super(TerminologyView, self).to_json()
-        as_dict = json.loads(as_json)
-        del as_dict['_id']
-        return as_dict
-
-
+@register_signals
 class DomainView(mongo_db.Document, SearchableMixin):
     __indexname__ = 'domains'
     __searchable__ = ['name', 'creation_date', 'creator', 'description']
@@ -91,6 +127,7 @@ class DomainView(mongo_db.Document, SearchableMixin):
     Terminology.TranslationDeleted,
     Terminology.TranslationUpdated,
     Terminology.DomainSet, 
+    Terminology.LanguageChanged, 
     Terminology.Discarded,
     Domain.Created,
     Domain.NameChanged,
@@ -103,15 +140,16 @@ def consume(event):
 
 @consume.register(Terminology.Created)
 def _(event):
+
     terminology = TerminologyView(
         id=event.originator_id, 
         term=event.term,
         domain=event.domain,
+        language=event.language,
         creator=event.creator,
         creation_date=event.creation_date,
         
     )
-
 
     terminology.save()
 
@@ -121,6 +159,10 @@ def _(event):
     domain = DomainView.objects.get(id=event.domain)
     terminology.update(domain=domain)
 
+@consume.register(Terminology.LanguageChanged)
+def _(event):
+    terminology = TerminologyView.objects.get(id=event.originator_id)
+    terminology.update(language=event.language)
 
 @consume.register(Terminology.TranslationAdded,)
 def _(event):
@@ -209,7 +251,3 @@ def _(event):
     domain = DomainView.objects(id=event.originator_id).first()
     domain.delete()
     
-
-
-signals.post_save.connect(TerminologyView.post_save, sender=TerminologyView)
-signals.post_delete.connect(TerminologyView.post_delete, sender=TerminologyView)

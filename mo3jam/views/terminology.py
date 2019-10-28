@@ -7,40 +7,37 @@ from eventsourcing.example.application import (
 
 from flask import request, jsonify, abort, current_app
 from flask_restplus import Resource, fields
+from flask_restplus.marshalling import marshal, marshal_with
 
 from .. import api
 from ..entities import *
 from ..models import TerminologyView, UserView, DomainView, DictionaryView
-
+from .serializers import terminology_fields, translation_fields
+from .utils import get_pagination_urls
 
 terminology_ns = api.namespace('terminologies', description='Terminology Endpoint',)
-
-terminology_fields = terminology_ns.model('Terminology', {
-    "term": fields.String(min_length=2),
-    "creator": fields.String
-})
-
-translation_fields = terminology_ns.model('Translation', {
-    "value": fields.String,
-    "creator": fields.String,
-    "author": fields.String,
-    "notes": fields.String
-})
 
 
 @terminology_ns.route('/')
 class TerminologyList(Resource):
 
     def get(self):
-        query = request.args.get('q', '')
+        response = {}
         page = request.args.get('page', 1)
-        queryset,_ = TerminologyView.search(query, page, current_app.config['RESULTS_PER_PAGE'])
-        return jsonify(TerminologyView.objects)
+        page_size = request.args.get('page_size', current_app.config['RESULTS_PER_PAGE']) 
+        queryset = list(TerminologyView.objects[(page-1)*page_size:page*page_size])
+        response['terminologies'] = marshal(
+            queryset,
+            terminology_fields,
+        )
+        response.update(get_pagination_urls(queryset, page, page_size))
+        return response
     
-    @terminology_ns.expect(terminology_fields, validate=True)    
+    @terminology_ns.expect(terminology_fields)    
     def post(self):
 
         term = request.json['term']
+        language = request.json.get('language')
         creator_id = uuid.UUID(request.json['creator'])
         domain_id = uuid.UUID(request.json['domain'])
         creator = UserView.objects.get(id=creator_id)
@@ -50,7 +47,8 @@ class TerminologyList(Resource):
             term=term, 
             domain=domain.id,
             creator=creator.id,
-            creation_date=datetime.now() 
+            creation_date=datetime.now(),
+            language=language,
         )
 
         terminology.__save__()
@@ -58,53 +56,61 @@ class TerminologyList(Resource):
         return '', 200
 
 
-@terminology_ns.route('/<string:term_id>')
-@terminology_ns.doc(params={'term_id': "Terminology's ID " })
+@terminology_ns.route('/<string:id>')
+@terminology_ns.doc(params={'id': "Terminology's ID " })
 class TerminologyDetails(Resource):
-
-    def get(self, term_id):
-        terminology = TerminologyView.objects(id=term_id).first()
+    
+    @marshal_with(terminology_fields)
+    def get(self, id):
+        terminology = TerminologyView.objects(id=id).first()
         if terminology:
-            return jsonify(terminology)
+            return terminology
         else:
             abort(404)
 
     @terminology_ns.expect(terminology_fields)    
-    def put(self, term_id):
+    def put(self, id):
         app = get_example_application()
-        terminology = app.example_repository[uuid.UUID(term_id)]
-
-        domain = DomainView.objects.get(id=uuid.UUID(request.json.get('domain')))
-        if domain and domain.id != terminology.domain:
-            terminology.set_domain(domain.id)
+        terminology = app.example_repository[uuid.UUID(id)]
         
+        language = request.json.get('language')
+        domain_id = request.json.get('domain')
+       
+        if domain_id:
+            domain = DomainView.objects.get(id=domain_id)
+            if domain.id != terminology.domain:
+                terminology.set_domain(domain.id)
+        if language and language != terminology.language:
+            terminology.change_language(language)
+
         terminology.__save__()
         return '', 200
 
-    def delete(self, term_id):
+    def delete(self, id):
         app = get_example_application()
-        terminology = app.example_repository[uuid.UUID(term_id)]
+        terminology = app.example_repository[uuid.UUID(id)]
         terminology.__discard__()
         terminology.__save__()
 
         return '', 204
 
-@terminology_ns.route('/<string:term_id>/translations')
-@terminology_ns.doc(params={'term_id': "Terminology's ID " })
+@terminology_ns.route('/<string:id>/translations')
+@terminology_ns.doc(params={'id': "Terminology's ID " })
 class TranslationsList(Resource):
-
-    def get(self, term_id):
-        terminology = TerminologyView.objects(id=term_id).first()
+    
+    @marshal_with(translation_fields)
+    def get(self, id):
+        terminology = TerminologyView.objects(id=id).first()
         if terminology:
-            return jsonify(terminology.translations)
+            return terminology.translations
         else:
             abort(404)
    
-    @terminology_ns.expect(translation_fields, validate=True)
-    def post(self, term_id):
+    @terminology_ns.expect(translation_fields)
+    def post(self, id):
 
         app = get_example_application()
-        terminology = app.example_repository[uuid.UUID(term_id)]
+        terminology = app.example_repository[uuid.UUID(id)]
 
         value = request.json['value']
         notes = request.json.get('notes', '')
@@ -130,23 +136,23 @@ class TranslationsList(Resource):
         return '', 200
 
 
-@terminology_ns.route('/<string:term_id>/translations/<string:trans_id>')
-@terminology_ns.doc(params={'term_id': "Terminology's ID ", "trans_id": "Translation's ID"})
+@terminology_ns.route('/<string:id>/translations/<string:trans_id>')
+@terminology_ns.doc(params={'id': "Terminology's ID ", "trans_id": "Translation's ID"})
 class TranslationDetails(Resource):
-
-    def get(self, term_id, trans_id):
-        terminology = TerminologyView.objects(id=term_id).first()
-        for trans in terminology.translations:
-            if trans.id == trans_id:
-                return jsonify(trans)
-        
+    
+    @marshal_with(translation_fields)
+    def get(self, id, trans_id):
+        terminology = TerminologyView.objects(id=id).first()
+        translation = terminology.translations.get(id=trans_id)
+        if translation:
+            return translation
         abort(404)
 
     @terminology_ns.expect(translation_fields,)
-    def put(self, term_id, trans_id):
+    def put(self, id, trans_id):
         
         app = get_example_application()
-        terminology = app.example_repository[uuid.UUID(term_id)]
+        terminology = app.example_repository[uuid.UUID(id)]
         data = {}
 
         value = request.json.get('value')
@@ -171,10 +177,10 @@ class TranslationDetails(Resource):
 
         return '', 200
 
-    def delete(self, term_id, trans_id):
+    def delete(self, id, trans_id):
 
         app = get_example_application()
-        terminology = app.example_repository[uuid.UUID(term_id)]
+        terminology = app.example_repository[uuid.UUID(id)]
 
         trans_id = uuid.UUID(trans_id)
         terminology.delete_translation(trans_id)
