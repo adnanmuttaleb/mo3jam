@@ -13,14 +13,14 @@ from .. import api
 from ..entities import *
 from ..models import TerminologyView, UserView, DomainView, DictionaryView
 from .serializers import terminology_fields, translation_fields
-from .utils import get_pagination_urls
+from .utils import get_pagination_urls, roles_accepted, roles_required
 
 terminology_ns = api.namespace('terminologies', description='Terminology Endpoint',)
 
 
 @terminology_ns.route('/')
 class TerminologyList(Resource):
-
+    
     def get(self):
         response = {}
         page = request.args.get('page', 1)
@@ -32,7 +32,8 @@ class TerminologyList(Resource):
         )
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
-    
+
+    @roles_accepted(['superuser', 'editor',])
     @terminology_ns.expect(terminology_fields)    
     def post(self):
 
@@ -68,6 +69,7 @@ class TerminologyDetails(Resource):
         else:
             abort(404)
 
+    @roles_accepted(['superuser', 'editor',])
     @terminology_ns.expect(terminology_fields)    
     def put(self, id):
         app = get_example_application()
@@ -86,6 +88,7 @@ class TerminologyDetails(Resource):
         terminology.__save__()
         return '', 200
 
+    @roles_accepted(['superuser', 'editor',])
     def delete(self, id):
         app = get_example_application()
         terminology = app.example_repository[uuid.UUID(id)]
@@ -105,7 +108,8 @@ class TranslationsList(Resource):
             return terminology.translations
         else:
             abort(404)
-   
+    
+    @roles_accepted(['superuser', 'editor',])
     @terminology_ns.expect(translation_fields)
     def post(self, id):
 
@@ -147,7 +151,8 @@ class TranslationDetails(Resource):
         if translation:
             return translation
         abort(404)
-
+    
+    @roles_accepted(['superuser', 'editor',])
     @terminology_ns.expect(translation_fields,)
     def put(self, id, trans_id):
         
@@ -176,7 +181,8 @@ class TranslationDetails(Resource):
         terminology.__save__()
 
         return '', 200
-
+    
+    @roles_accepted(['superuser', 'editor',])
     def delete(self, id, trans_id):
 
         app = get_example_application()

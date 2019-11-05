@@ -4,7 +4,6 @@ from datetime import datetime
 from flask import request, jsonify, abort, current_app, url_for
 from flask_restplus import Resource
 from flask_restplus.marshalling import marshal
-from flask_security import login_required
 
 from .. import api
 from ..models import TerminologyView, UserView, DomainView, DictionaryView

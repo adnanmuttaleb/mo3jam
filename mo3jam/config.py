@@ -12,4 +12,9 @@ MONGODB_SETTINGS = {
 ELASTICSEARCH_URL = "http://localhost:9200"
 RESULTS_PER_PAGE = 20
 
-FLASK_ADMIN_SWATCH = 'cerulean'
+SENTRY_DSN = "https://279b767a15ac40dc9ef3aee616d79adb@sentry.io/1797633"
+
+
+JWT_SECRET_KEY = 'supersecret'
+JWT_BLACKLIST_ENABLED = True
+JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']

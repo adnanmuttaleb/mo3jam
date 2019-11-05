@@ -3,14 +3,21 @@ import json
 import uuid
 import six
 
+from passlib.hash import pbkdf2_sha256 as sha256
 from mongoengine import signals
 from eventsourcing.domain.model.decorators import subscribe_to
-
-from flask_security import UserMixin, RoleMixin
 
 from . import mongo_db
 from .search import add_to_index, remove_from_index, query_index, bulk_add_to_index
 from .entities import Terminology, Domain
+
+
+ROLES = (
+    ('superuser', 'Super User'),
+    ('editor', 'Editor'),
+    ('moderator', 'Moderator'),
+)
+
 
 class SearchableMixin():
 
@@ -65,23 +72,31 @@ class DictionaryView(mongo_db.Document,):
     title = mongo_db.StringField(max_length=200, required=True)
     publication_date = mongo_db.DateTimeField()
 
-class Role(mongo_db.Document, RoleMixin):
+class Role(mongo_db.Document):
     name = mongo_db.StringField(max_length=80, unique=True)
     description = mongo_db.StringField(max_length=255)
 
 
 @register_signals
-class UserView(mongo_db.Document, UserMixin, SearchableMixin):
+class UserView(mongo_db.Document, SearchableMixin):
     __indexname__ = 'users'
     __searchable__ = ['username']
   
     id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
-    username = mongo_db.StringField(max_length=30, required=True)
-    email = mongo_db.EmailField(required=True)
+    username = mongo_db.StringField(max_length=30, required=True, unique=True)
+    email = mongo_db.EmailField(required=True, unique=True)
     password = mongo_db.StringField(max_length=255)
     active = mongo_db.BooleanField(default=True)
     confirmed_at = mongo_db.DateTimeField()
-    roles = mongo_db.ListField(mongo_db.ReferenceField(Role), default=[])
+    roles = mongo_db.ListField(mongo_db.StringField(choices=ROLES), default=[])
+
+    @staticmethod
+    def generate_hash(password):
+        return sha256.hash(password)    
+    
+    @staticmethod
+    def verify_hash(password, hash):
+        return sha256.verify(password, hash)
 
 
 class TranslationView(mongo_db.EmbeddedDocument):

@@ -14,7 +14,7 @@ from .. import api
 from ..entities import *
 from ..models import TerminologyView, DomainView, UserView
 from .serializers import domain_fields, user_fields
-from .utils import get_pagination_urls
+from .utils import get_pagination_urls, roles_accepted, roles_required
 
 domain_ns = api.namespace('domains', description='Domain Endpoint',)
 
@@ -33,7 +33,7 @@ class DomainList(Resource):
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
 
-    
+    @roles_accepted(['superuser', 'editor',])
     @domain_ns.expect(domain_fields,)
     def post(self):
         
@@ -64,7 +64,8 @@ class DomainDetails(Resource):
     @marshal_with(domain_fields)
     def get(self, domain_id):
         return DomainView.objects.get_or_404(id=domain_id)
-
+    
+    @roles_accepted(['superuser', 'editor',])
     @domain_ns.expect(domain_fields)
     def put(sef, domain_id):
         
@@ -84,7 +85,7 @@ class DomainDetails(Resource):
        
         return '', 200
 
-
+    @roles_accepted(['superuser', 'editor',])
     def delete(self, domain_id):
         app = get_example_application()
         domain = app.example_repository[uuid.UUID(domain_id)]

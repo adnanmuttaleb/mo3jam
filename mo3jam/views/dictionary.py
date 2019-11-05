@@ -8,7 +8,7 @@ from flask_restplus.marshalling import marshal, marshal_with
 from .. import api
 from ..models import DictionaryView
 from .serializers import dictionary_fields
-from .utils import get_pagination_urls
+from .utils import get_pagination_urls, roles_accepted, roles_required
 
 dictionary_ns = api.namespace('dictionaries', description="Dictionaries' API",)
 
@@ -27,6 +27,7 @@ class DictionaryList(Resource):
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
     
+    @roles_accepted(['superuser', 'editor',])
     @dictionary_ns.expect(dictionary_fields)    
     def post(self):
         
@@ -55,6 +56,7 @@ class DictionaryDetails(Resource):
     def get(self, dict_id):
         return DictionaryView.objects.get_or_404(id=dict_id)
     
+    @roles_accepted(['superuser', 'editor',])
     @dictionary_ns.expect(dictionary_fields,)    
     def put(self, dict_id):
 
@@ -71,6 +73,7 @@ class DictionaryDetails(Resource):
 
         return '', 200
 
+    @roles_accepted(['superuser', 'editor',])
     def delete(self, dict_id):
         dictionary = DictionaryView.objects.get_or_404(id=dict_id)
         dictionary.delete()

@@ -3,17 +3,19 @@ import uuid
 from flask import request, jsonify, abort, current_app
 from flask_restplus import Resource
 from flask_restplus.marshalling import marshal, marshal_with
+from flask_jwt_extended import  jwt_required, get_jwt_identity, verify_jwt_in_request
 
 from .. import api
 from ..models import UserView
 from .serializers import user_fields
-from .utils import get_pagination_urls
+from .utils import get_pagination_urls, roles_accepted, roles_required
 
 user_ns = api.namespace('users', description='Users API',)
 
 @user_ns.route('/')
 class UserList(Resource):
-
+    
+    @roles_required(["superuser",])
     def get(self):
         response = {}
         page = request.args.get('page', 1)
@@ -26,13 +28,18 @@ class UserList(Resource):
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
     
+    @roles_required(["superuser",])
     @user_ns.expect(user_fields)    
     def post(self):
 
-        username = request.json['username']
-        email = request.json['email']
+        data = {}
+        data['username'] = request.json['username']
+        data['email'] = request.json['email']
+        data["password"] = UserView.generate_hash(request.json["password"])
+        data["roles"] = request.json.get("roles", [])
+        data["id"] = uuid.uuid4()
 
-        user = UserView(id=uuid.uuid4(), username=username, email=email)
+        user = UserView(**data)
         user.save()
 
         return jsonify(user)
@@ -47,21 +54,28 @@ class UserDetails(Resource):
     @marshal_with(user_fields)
     def get(self, user_id):
         return UserView.objects.get_or_404(id=user_id)
-    
+
+
     @user_ns.expect(user_fields, validate=True)    
     def put(self, user_id):
+       
+        verify_jwt_in_request()
+        current_user_id = get_jwt_identity()
+        if uuid.UUID(current_user_id) != uuid.UUID(user_id):
+            return {'msg': 'Not Authorized'}, 403
 
-        username = request.json['username']
-        email = request.json['email']
-        
+        data = {}
+        data['username'] = request.json['username']
+        data['email'] = request.json['email']
+       
         user = UserView.objects.get_or_404(id=user_id)
         user.update(
-            username=username, 
-            email=email
+            **data
         )
 
         return '', 200
 
+    @roles_required(["superuser",])
     def delete(self, user_id):
         user = UserView.objects.get_or_404(id=user_id)
         user.delete()
