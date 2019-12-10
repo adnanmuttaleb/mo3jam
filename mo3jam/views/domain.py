@@ -33,7 +33,7 @@ class DomainList(Resource):
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
 
-    @roles_accepted(['superuser', 'editor',])
+    # @roles_accepted(['superuser', 'editor',])
     @domain_ns.expect(domain_fields,)
     def post(self):
         

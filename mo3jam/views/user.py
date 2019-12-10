@@ -6,7 +6,7 @@ from flask_restplus.marshalling import marshal, marshal_with
 from flask_jwt_extended import  jwt_required, get_jwt_identity, verify_jwt_in_request
 
 from .. import api
-from ..models import UserView
+from ..models import UserView, Role
 from .serializers import user_fields
 from .utils import get_pagination_urls, roles_accepted, roles_required
 
@@ -15,7 +15,6 @@ user_ns = api.namespace('users', description='Users API',)
 @user_ns.route('/')
 class UserList(Resource):
     
-    @roles_required(["superuser",])
     def get(self):
         response = {}
         page = request.args.get('page', 1)
@@ -28,21 +27,22 @@ class UserList(Resource):
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
     
-    @roles_required(["superuser",])
     @user_ns.expect(user_fields)    
     def post(self):
 
         data = {}
-        data['username'] = request.json['username']
-        data['email'] = request.json['email']
+        data['username'] = request.json['username'].lower()
+        data['email'] = request.json['email'].lower()
         data["password"] = UserView.generate_hash(request.json["password"])
-        data["roles"] = request.json.get("roles", [])
+        
+        roles = request.json.get("roles", [])
         data["id"] = uuid.uuid4()
-
+        data["roles"] = Role.objects(id__in=roles)
+        
         user = UserView(**data)
         user.save()
 
-        return jsonify(user)
+        return marshal(user, user_fields)
 
 
 @user_ns.route('/<string:user_id>')
@@ -55,10 +55,8 @@ class UserDetails(Resource):
     def get(self, user_id):
         return UserView.objects.get_or_404(id=user_id)
 
-
     @user_ns.expect(user_fields, validate=True)    
-    def put(self, user_id):
-       
+    def put(self, user_id):       
         verify_jwt_in_request()
         current_user_id = get_jwt_identity()
         if uuid.UUID(current_user_id) != uuid.UUID(user_id):
@@ -73,9 +71,9 @@ class UserDetails(Resource):
             **data
         )
 
-        return '', 200
+        return marshal(user, user_fields)
 
-    @roles_required(["superuser",])
+    
     def delete(self, user_id):
         user = UserView.objects.get_or_404(id=user_id)
         user.delete()

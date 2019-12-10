@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime
 
+import pyexcel as px
 from eventsourcing.example.application import (
     get_example_application, 
 )
 
-from flask import request, jsonify, abort, current_app
+from flask import request, abort, current_app, make_response, send_file
 from flask_restplus import Resource, fields
 from flask_restplus.marshalling import marshal, marshal_with
 
@@ -14,13 +15,38 @@ from ..entities import *
 from ..models import TerminologyView, UserView, DomainView, DictionaryView
 from .serializers import terminology_fields, translation_fields
 from .utils import get_pagination_urls, roles_accepted, roles_required
+from ..utils.file_utils import get_records, get_spreadsheet
 
 terminology_ns = api.namespace('terminologies', description='Terminology Endpoint',)
+
+def parse_terminology(obj):
+    data = {}
+    data['term'] = obj['term'].lower()
+    data['language'] = obj.get('language', 'en')
+    creator_id = uuid.UUID(obj['creator'])
+    domain_id = uuid.UUID(obj['domain'])
+    data['creator'] = UserView.objects.get(id=creator_id).id
+    data['domain'] = DomainView.objects.get(id=domain_id).id           
+    
+    return data
+
+
+def parse_translation(obj):
+    data = {}
+    data['value'] = obj['value'].lower()
+    data['notes'] = obj.get('notes', '').lower()
+    creator_id = uuid.UUID(obj['creator'])
+    author_id = uuid.UUID(obj['author'])
+    data['creator'] = UserView.objects.get(id=creator_id).id
+    data['author'] = DictionaryView.objects(id=author_id).first()
+    
+    data['author'] = data['author'].id if data['author'] else data['creator']
+    return data
 
 
 @terminology_ns.route('/')
 class TerminologyList(Resource):
-    
+
     def get(self):
         response = {}
         page = request.args.get('page', 1)
@@ -33,27 +59,15 @@ class TerminologyList(Resource):
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
 
-    @roles_accepted(['superuser', 'editor',])
     @terminology_ns.expect(terminology_fields)    
     def post(self):
-
-        term = request.json['term']
-        language = request.json.get('language')
-        creator_id = uuid.UUID(request.json['creator'])
-        domain_id = uuid.UUID(request.json['domain'])
-        creator = UserView.objects.get(id=creator_id)
-        domain = DomainView.objects.get(id=domain_id)        
-        
+        terminology_data = parse_terminology(request.json)
         terminology = Terminology.__create__(
-            term=term, 
-            domain=domain.id,
-            creator=creator.id,
+            **terminology_data,
             creation_date=datetime.now(),
-            language=language,
         )
 
         terminology.__save__()
-        
         return '', 200
 
 
@@ -63,11 +77,7 @@ class TerminologyDetails(Resource):
     
     @marshal_with(terminology_fields)
     def get(self, id):
-        terminology = TerminologyView.objects(id=id).first()
-        if terminology:
-            return terminology
-        else:
-            abort(404)
+        return TerminologyView.objects.get_or_404(id=id)
 
     @roles_accepted(['superuser', 'editor',])
     @terminology_ns.expect(terminology_fields)    
@@ -97,46 +107,74 @@ class TerminologyDetails(Resource):
 
         return '', 204
 
+
+@terminology_ns.route('/upload')
+class UploadTerminologies(Resource):
+
+    def save(self, record):
+        terminology_data = parse_terminology(record)
+        terminology = Terminology.__create__(
+            **terminology_data,
+            creation_date=datetime.now(),
+        )
+
+        terminology.__save__()
+        return terminology
+        
+
+    def post(self): 
+        if 'file' not in request.files:
+            abort(400, 'No File Selected')
+
+        uploaded_file = request.files["file"]
+        records = get_records(uploaded_file, file_type='xlsx')
+        saved, failed = [],[]
+        
+        for record in records:
+            try:
+                terminology = self.save(record)
+                record.update(id=str(terminology.id))
+                saved.append(record)
+            except Exception as e:
+                record.update(reason=str(e))
+                failed.append(record)
+                
+        output_file = get_spreadsheet(
+            {
+                'Saved': saved, 
+                'Failed': failed
+            }
+        )
+        
+        return send_file(
+            output_file, 
+            as_attachment=True, 
+            attachment_filename='upload-reports.xlsx'
+        )
+
 @terminology_ns.route('/<string:id>/translations')
 @terminology_ns.doc(params={'id': "Terminology's ID " })
 class TranslationsList(Resource):
     
     @marshal_with(translation_fields)
     def get(self, id):
-        terminology = TerminologyView.objects(id=id).first()
-        if terminology:
-            return terminology.translations
-        else:
-            abort(404)
+        return TerminologyView.objects.get_or_404(id=id).translations
     
-    @roles_accepted(['superuser', 'editor',])
     @terminology_ns.expect(translation_fields)
     def post(self, id):
-
         app = get_example_application()
         terminology = app.example_repository[uuid.UUID(id)]
+        data = parse_translation(request.json)
 
-        value = request.json['value']
-        notes = request.json.get('notes', '')
-        author_id = uuid.UUID(request.json['author'])
-        creator_id = uuid.UUID(request.json['creator'])
-
-        
-        creator = UserView.objects.get(id=creator_id)
-        author = DictionaryView.objects.get(id=author_id) or creator 
-        
         translation = Translation(
+            **data,
             id =uuid.uuid4(), 
-            value=value, 
-            author=author.id, 
-            creator=creator.id,
-            creation_date=datetime.now(),
-            notes=notes
+            creation_date=datetime.now(),          
         )        
 
         terminology.add_translation(translation)
         terminology.__save__()
-
+        
         return '', 200
 
 
@@ -155,7 +193,6 @@ class TranslationDetails(Resource):
     @roles_accepted(['superuser', 'editor',])
     @terminology_ns.expect(translation_fields,)
     def put(self, id, trans_id):
-        
         app = get_example_application()
         terminology = app.example_repository[uuid.UUID(id)]
         data = {}
@@ -184,7 +221,6 @@ class TranslationDetails(Resource):
     
     @roles_accepted(['superuser', 'editor',])
     def delete(self, id, trans_id):
-
         app = get_example_application()
         terminology = app.example_repository[uuid.UUID(id)]
 
@@ -194,3 +230,52 @@ class TranslationDetails(Resource):
 
         return '', 204
 
+
+@terminology_ns.route('/<string:id>/upload/translations')
+class UploadTranslations(Resource):
+
+    def save(self, record):
+        app = get_example_application()
+        terminology = app.example_repository[uuid.UUID(id)]
+        data = parse_translation(record)
+
+        translation = Translation(
+            **data,
+            id =uuid.uuid4(), 
+            creation_date=datetime.now(),          
+        )        
+
+        terminology.add_translation(translation)
+        terminology.__save__()
+        
+        return translation
+    
+    def post(self, id): 
+        if 'file' not in request.files:
+            abort(400, 'No File Selected')
+
+        uploaded_file = request.files["file"]
+        records = get_records(data_file=uploaded_file, file_type='xlsx')
+        saved, failed = [], []
+        
+        for record in records:
+            try:
+                translation = self.save(record)
+                record.update(id=str(translation.id))
+                saved.append(record)
+            except Exception as e:
+                record.update(reason=str(e))
+                failed.append(record)          
+
+        output_file = get_spreadsheet(
+            {
+                'Saved': saved, 
+                'Failed': failed
+            }
+        )
+
+        return send_file(
+            output_file, 
+            as_attachment=True, 
+            attachment_filename='upload-reports.xlsx'
+        )

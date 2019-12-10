@@ -1,14 +1,12 @@
-from functools import wraps
 import uuid
-from werkzeug.urls import url_encode
+from functools import wraps
 
+from werkzeug.urls import url_encode
 from flask import request, jsonify
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_claims, get_current_user
 
 def roles_required(roles):
-    
     def decorator(func):
-    
         @wraps(func)
         def wrapper(*args, **kwargs):
             verify_jwt_in_request()
@@ -25,7 +23,6 @@ def roles_required(roles):
 
 
 def roles_accepted(roles):
-    
     def decorator(func):
     
         @wraps(func)

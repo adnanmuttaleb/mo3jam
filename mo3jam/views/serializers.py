@@ -11,11 +11,6 @@ author_fields = api.model(
             'dictionary' if x._cls == DictionaryView.__name__\
             else 'user'
         ),
-        'username': fields.String,
-        'email': fields.String,
-        'title': fields.String,
-        'author': fields.String,
-        'publication_date': fields.Date,
         'id': fields.String,
 
     }
@@ -28,7 +23,6 @@ dictionary_fields = api.model(
         'author': fields.String,
         'publication_date': fields.Date,
         'id': fields.String,
-
     }
 )
 
@@ -37,8 +31,19 @@ user_fields = api.model(
     {
         'username': fields.String,
         'email': fields.String,
-        'id': fields.String 
+        'active':fields.String,
+        'roles': fields.List(fields.String(attribute='id')),
+        'id': fields.String, 
+    
+    }
+)
 
+role_fields = api.model(
+    'Role', 
+    {
+        'name': fields.String,
+        'description': fields.String,
+        'id': fields.String, 
     }
 )
 
@@ -46,7 +51,7 @@ translation_fields = api.model(
     'Translation', 
     {
         'value': fields.String,
-        'creator': fields.Nested(user_fields),
+        'creator': fields.String(attribute=lambda trans: trans.creator.id),
         'author': fields.Nested(author_fields, skip_none=True),
         'creation_date': fields.DateTime,
         'notes': fields.String,
@@ -60,7 +65,7 @@ domain_fields = api.model(
     {
         'name': fields.String,
         'description': fields.String,
-        'creator': fields.Nested(user_fields),
+        'creator': fields.String(attribute=lambda domain: domain.creator.id),
         'creation_date': fields.DateTime,
         'id': fields.String 
 
@@ -72,12 +77,12 @@ terminology_fields = api.model(
     {
         'term': fields.String(min_length=2),
         'language': fields.String,
-        'creator': fields.Nested(user_fields),
+        'creator': fields.String(attribute=lambda term: term.creator.id),
         'creation_date': fields.DateTime,
         'notes': fields.List(fields.String),
-        'domain': fields.Nested(domain_fields),
+        'domain': fields.String(attribute=lambda term: term.domain.id),
         'id': fields.String,
-        'translations': fields.Nested(translation_fields),
+        'translations': fields.List(fields.String(attribute='id')),
     }
 )
 

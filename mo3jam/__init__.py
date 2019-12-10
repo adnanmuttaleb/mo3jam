@@ -27,10 +27,6 @@ jwt_manager = JWTManager()
 
 api = Api(title='Mo3jam API', version="1.0", doc='/docs', prefix='/api/v1.0')
 
-from .models import UserView, Role
-from .views import *
-
-
 class IntegerSequencedItem(db.Model):
     __tablename__ = 'integer_sequenced_items'
 
@@ -66,6 +62,18 @@ def create_app(test_config=None):
     api.init_app(app)
     jwt_manager.init_app(app)
 
+
+    from .models import UserView, Role
+    from .views import (
+        user_ns, 
+        role_ns, 
+        auth_ns, 
+        dictionary_ns, 
+        domain_ns, 
+        terminology_ns,
+        search_ns
+    )
+
     sentry_sdk.init(
         dsn=app.config['SENTRY_DSN'],
         integrations=[FlaskIntegration()]
@@ -74,7 +82,7 @@ def create_app(test_config=None):
     @jwt_manager.user_claims_loader
     def add_claims_to_access_token(identity):
         return {   
-            "roles": UserView.objects.get(id=identity).roles
+            "roles": [role.name for role in UserView.objects.get(id=identity).roles]
         }
 
     @jwt_manager.token_in_blacklist_loader
@@ -91,7 +99,8 @@ def create_app(test_config=None):
             ),
 
         )
-
-
+    with app.app_context() as ctx:
+        db.create_all()
+    
     return app
     

@@ -27,7 +27,6 @@ class DictionaryList(Resource):
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
     
-    @roles_accepted(['superuser', 'editor',])
     @dictionary_ns.expect(dictionary_fields)    
     def post(self):
         
@@ -41,8 +40,8 @@ class DictionaryList(Resource):
             title=title, 
             publication_date=pub_date
         )
+        
         dictionary.save()
-
         return jsonify(dictionary)
 
 

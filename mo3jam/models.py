@@ -12,13 +12,6 @@ from .search import add_to_index, remove_from_index, query_index, bulk_add_to_in
 from .entities import Terminology, Domain
 
 
-ROLES = (
-    ('superuser', 'Super User'),
-    ('editor', 'Editor'),
-    ('moderator', 'Moderator'),
-)
-
-
 class SearchableMixin():
 
     @classmethod
@@ -72,7 +65,9 @@ class DictionaryView(mongo_db.Document,):
     title = mongo_db.StringField(max_length=200, required=True)
     publication_date = mongo_db.DateTimeField()
 
+
 class Role(mongo_db.Document):
+    id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
     name = mongo_db.StringField(max_length=80, unique=True)
     description = mongo_db.StringField(max_length=255)
 
@@ -88,7 +83,7 @@ class UserView(mongo_db.Document, SearchableMixin):
     password = mongo_db.StringField(max_length=255)
     active = mongo_db.BooleanField(default=True)
     confirmed_at = mongo_db.DateTimeField()
-    roles = mongo_db.ListField(mongo_db.StringField(choices=ROLES), default=[])
+    roles = mongo_db.ListField(mongo_db.ReferenceField(Role))
 
     @staticmethod
     def generate_hash(password):
@@ -123,6 +118,7 @@ class TerminologyView(mongo_db.Document, SearchableMixin):
     domain = mongo_db.ReferenceField('DomainView', required=True)
     creator = mongo_db.ReferenceField(UserView)
     creation_date = mongo_db.DateTimeField()
+
 
 @register_signals
 class DomainView(mongo_db.Document, SearchableMixin):
