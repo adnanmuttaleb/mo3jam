@@ -58,13 +58,18 @@ def register_signals(cls):
     return cls
 
 
-class DictionaryView(mongo_db.Document,):
-    __searchable__ = ['author', 'title',]
+class Source(mongo_db.Document):
     id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
+    meta = {'allow_inheritance': True}
+
+
+class DictionaryView(Source):
+    __searchable__ = ['author', 'title',]
     author = mongo_db.StringField(max_length=400,)
     title = mongo_db.StringField(max_length=200, required=True)
     publication_date = mongo_db.DateTimeField()
 
+#should User be source
 
 class Role(mongo_db.Document):
     id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
@@ -137,7 +142,7 @@ class DomainView(mongo_db.Document, SearchableMixin):
     Terminology.TranslationAdded, 
     Terminology.TranslationDeleted,
     Terminology.TranslationUpdated,
-    Terminology.DomainSet, 
+    Terminology.DomainChanged, 
     Terminology.LanguageChanged, 
     Terminology.Discarded,
     Domain.Created,
@@ -164,7 +169,7 @@ def _(event):
 
     terminology.save()
 
-@consume.register(Terminology.DomainSet)
+@consume.register(Terminology.DomainChanged)
 def _(event):
     terminology = TerminologyView.objects.get(id=event.originator_id)
     domain = DomainView.objects.get(id=event.domain)

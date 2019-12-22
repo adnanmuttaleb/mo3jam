@@ -2,15 +2,14 @@ import uuid
 from datetime import datetime
 
 from flask import request, jsonify, abort, current_app, url_for
-from flask_restplus import Resource
+from flask_restplus import Resource, Namespace
 from flask_restplus.marshalling import marshal
 
-from .. import api
 from ..models import TerminologyView, UserView, DomainView, DictionaryView
-from .serializers import *
-from .utils import get_pagination_urls
+from ..serializers import terminology_fields, domain_fields, user_fields 
+from ..utils import get_pagination_urls
 
-search_ns = api.namespace('search', description='Search Endpoint',)
+search_ns = Namespace('search', description='Search Endpoint',)
 
 
 @search_ns.route('/terminology')
@@ -26,7 +25,7 @@ class TerminologySearch(Resource):
         
         response = {}
         response['count'] = count
-        response['terminologies'] = marshal(queryset, terminology_fields,)
+        response['terminologies'] = marshal(queryset, terminology_fields)
         response.update(get_pagination_urls(queryset, page, page_size))
         
         return response

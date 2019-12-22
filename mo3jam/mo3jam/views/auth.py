@@ -7,11 +7,10 @@ from flask_jwt_extended import (
     jwt_required,
     get_raw_jwt
 )
-from flask_restplus import Resource
-from .. import api
+from flask_restplus import Resource, Namespace
 from ..models import UserView
 
-auth_ns = api.namespace('auth', description='Authentication API',)
+auth_ns = Namespace('auth', description='Authentication API',)
 blacklist = set()
 
 @auth_ns.route('/login', methods=['POST'])

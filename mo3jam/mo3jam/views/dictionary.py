@@ -2,15 +2,14 @@ from dateutil.parser import parse as date_parser
 import uuid
 
 from flask import request, jsonify, abort, current_app
-from flask_restplus import Resource
+from flask_restplus import Resource, Namespace
 from flask_restplus.marshalling import marshal, marshal_with
 
-from .. import api
 from ..models import DictionaryView
-from .serializers import dictionary_fields
-from .utils import get_pagination_urls, roles_accepted, roles_required
+from ..serializers import dictionary_fields
+from ..utils import get_pagination_urls, roles_accepted, roles_required
 
-dictionary_ns = api.namespace('dictionaries', description="Dictionaries' API",)
+dictionary_ns = Namespace('dictionaries', description="Dictionaries' API",)
 
 @dictionary_ns.route('/')
 class DictionaryList(Resource):

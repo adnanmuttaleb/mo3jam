@@ -1,16 +1,15 @@
 import uuid
 
-from flask import request, jsonify, abort, current_app
-from flask_restplus import Resource
+from flask import request, current_app
+from flask_restplus import Resource, Namespace
 from flask_restplus.marshalling import marshal, marshal_with
 from flask_jwt_extended import  jwt_required, get_jwt_identity, verify_jwt_in_request
 
-from .. import api
 from ..models import UserView, Role
-from .serializers import user_fields
-from .utils import get_pagination_urls, roles_accepted, roles_required
+from ..serializers import user_fields
+from ..utils import get_pagination_urls, roles_accepted, roles_required
 
-user_ns = api.namespace('users', description='Users API',)
+user_ns = Namespace('users', description='Users API',)
 
 @user_ns.route('/')
 class UserList(Resource):

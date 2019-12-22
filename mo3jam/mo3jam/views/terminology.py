@@ -1,34 +1,23 @@
 import uuid
 from datetime import datetime
 
-import pyexcel as px
-from eventsourcing.example.application import (
-    get_example_application, 
-)
-
-from flask import request, abort, current_app, make_response, send_file
-from flask_restplus import Resource, fields
+from eventsourcing.example.application import get_example_application
+from flask import request, abort, current_app, send_file
+from flask_restplus import Resource, fields, Namespace
 from flask_restplus.marshalling import marshal, marshal_with
 
-from .. import api
-from ..entities import *
-from ..models import TerminologyView, UserView, DomainView, DictionaryView
-from .serializers import terminology_fields, translation_fields
-from .utils import get_pagination_urls, roles_accepted, roles_required
-from ..utils.file_utils import get_records, get_spreadsheet
+from mo3jam.entities import *
+from mo3jam.schemas import TerminologySchema
+from mo3jam.models import TerminologyView, UserView, DomainView, DictionaryView
+from mo3jam.serializers import terminology_fields, translation_fields
+from mo3jam.utils import (
+    get_pagination_urls, 
+    roles_accepted, roles_required, 
+    get_records, get_spreadsheet
+)
 
-terminology_ns = api.namespace('terminologies', description='Terminology Endpoint',)
 
-def parse_terminology(obj):
-    data = {}
-    data['term'] = obj['term'].lower()
-    data['language'] = obj.get('language', 'en')
-    creator_id = uuid.UUID(obj['creator'])
-    domain_id = uuid.UUID(obj['domain'])
-    data['creator'] = UserView.objects.get(id=creator_id).id
-    data['domain'] = DomainView.objects.get(id=domain_id).id           
-    
-    return data
+terminology_ns = Namespace('terminologies', description='Terminology Endpoint',)
 
 
 def parse_translation(obj):
@@ -46,24 +35,21 @@ def parse_translation(obj):
 
 @terminology_ns.route('/')
 class TerminologyList(Resource):
-
+    schema = TerminologySchema()
     def get(self):
         response = {}
         page = request.args.get('page', 1)
         page_size = request.args.get('page_size', current_app.config['RESULTS_PER_PAGE']) 
-        queryset = list(TerminologyView.objects[(page-1)*page_size:page*page_size])
-        response['terminologies'] = marshal(
-            queryset,
-            terminology_fields,
-        )
+        queryset = TerminologyView.objects[(page-1)*page_size:page*page_size]
+        response['terminologies'] = self.schema.dump(queryset, many=True)
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
 
     @terminology_ns.expect(terminology_fields)    
     def post(self):
-        terminology_data = parse_terminology(request.json)
+        data = self.schema.load(request.get_json())
         terminology = Terminology.__create__(
-            **terminology_data,
+            **data,
             creation_date=datetime.now(),
         )
 
@@ -74,26 +60,21 @@ class TerminologyList(Resource):
 @terminology_ns.route('/<string:id>')
 @terminology_ns.doc(params={'id': "Terminology's ID " })
 class TerminologyDetails(Resource):
-    
-    @marshal_with(terminology_fields)
-    def get(self, id):
-        return TerminologyView.objects.get_or_404(id=id)
+    schema = TerminologySchema()
 
-    @roles_accepted(['superuser', 'editor',])
+    def get(self, id):
+        return self.schema.dump(TerminologyView.objects.get_or_404(id=id))
+
     @terminology_ns.expect(terminology_fields)    
     def put(self, id):
         app = get_example_application()
         terminology = app.example_repository[uuid.UUID(id)]
         
-        language = request.json.get('language')
-        domain_id = request.json.get('domain')
-       
-        if domain_id:
-            domain = DomainView.objects.get(id=domain_id)
-            if domain.id != terminology.domain:
-                terminology.set_domain(domain.id)
-        if language and language != terminology.language:
-            terminology.change_language(language)
+        data = self.schema.load(request.get_json())
+        if data["domain"] != terminology.domain:
+            terminology.change_domain(data["domain"])
+        if data['language'] != terminology.language:
+            terminology.change_language(data['language'])
 
         terminology.__save__()
         return '', 200

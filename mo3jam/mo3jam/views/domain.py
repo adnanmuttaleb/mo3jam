@@ -6,17 +6,17 @@ from eventsourcing.example.application import (
     get_example_application, 
 )
 
-from flask import request, jsonify, abort, current_app
-from flask_restplus import Resource
+from flask import request, abort, current_app
+from flask_restplus import Resource, Namespace
 from flask_restplus.marshalling import marshal, marshal_with
 
-from .. import api
-from ..entities import *
-from ..models import TerminologyView, DomainView, UserView
-from .serializers import domain_fields, user_fields
-from .utils import get_pagination_urls, roles_accepted, roles_required
+from ..entities import Domain
+from ..models import DomainView, UserView
+from ..serializers import domain_fields
+from ..utils import get_pagination_urls, roles_accepted, roles_required
 
-domain_ns = api.namespace('domains', description='Domain Endpoint',)
+domain_ns = Namespace('domains', description='Domain Endpoint',)
+
 
 @domain_ns.route('/')
 class DomainList(Resource):
@@ -33,7 +33,6 @@ class DomainList(Resource):
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
 
-    # @roles_accepted(['superuser', 'editor',])
     @domain_ns.expect(domain_fields,)
     def post(self):
         

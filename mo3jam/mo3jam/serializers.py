@@ -1,10 +1,7 @@
-from flask_restplus import Resource, fields
+from flask_restplus import Resource, fields, Model
+from .models import TerminologyView, UserView, DomainView, DictionaryView
 
-from .. import api
-from ..models import TerminologyView, UserView, DomainView, DictionaryView
-
-
-author_fields = api.model(
+author_fields = Model(
     'Author', 
     {   'type': fields.String(
             attribute=lambda x: 'author' if not x else\
@@ -16,7 +13,7 @@ author_fields = api.model(
     }
 )
 
-dictionary_fields = api.model(
+dictionary_fields = Model(
     'Dictionary', 
     {   
         'title': fields.String,
@@ -26,7 +23,7 @@ dictionary_fields = api.model(
     }
 )
 
-user_fields = api.model(
+user_fields = Model(
     'User', 
     {
         'username': fields.String,
@@ -38,7 +35,7 @@ user_fields = api.model(
     }
 )
 
-role_fields = api.model(
+role_fields = Model(
     'Role', 
     {
         'name': fields.String,
@@ -47,7 +44,7 @@ role_fields = api.model(
     }
 )
 
-translation_fields = api.model(
+translation_fields = Model(
     'Translation', 
     {
         'value': fields.String,
@@ -60,7 +57,7 @@ translation_fields = api.model(
     }
 )
 
-domain_fields = api.model(
+domain_fields = Model(
     'Domain', 
     {
         'name': fields.String,
@@ -72,7 +69,7 @@ domain_fields = api.model(
     }
 )
 
-terminology_fields = api.model(
+terminology_fields = Model(
     'Terminology', 
     {
         'term': fields.String(min_length=2),

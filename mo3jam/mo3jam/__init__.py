@@ -1,21 +1,17 @@
-from sqlalchemy_utils import UUIDType
+import sentry_sdk
 from flask import Flask
-from flask_restplus import Api
 from flask_jwt_extended import JWTManager
 from eventsourcing.example.application import (
     init_example_application
 )
-
 from eventsourcing.infrastructure.sqlalchemy.manager import (
     SQLAlchemyRecordManager,
 )
-
+from eventsourcing.infrastructure.sqlalchemy.records import IntegerSequencedWithIDRecord
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_mongoengine import MongoEngine
 from elasticsearch import Elasticsearch
-
-import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 
@@ -23,24 +19,6 @@ db = SQLAlchemy()
 mongo_db = MongoEngine()
 migrate = Migrate()
 jwt_manager = JWTManager()
-
-
-api = Api(title='Mo3jam API', version="1.0", doc='/docs', prefix='/api/v1.0')
-
-class IntegerSequencedItem(db.Model):
-    __tablename__ = 'integer_sequenced_items'
-
-    id = db.Column(db.Integer, primary_key=True,)
-
-    sequence_id = db.Column(UUIDType(), nullable=False)
-
-    position = db.Column(db.BigInteger(), nullable=False, default=0)
-
-    topic = db.Column(db.String(255))
-
-    state = db.Column(db.Text())
-
-    __table_args__ = db.Index('index', 'sequence_id', 'position', unique=True),
 
 
 def create_app(test_config=None):
@@ -56,23 +34,15 @@ def create_app(test_config=None):
     app.elasticsearch = Elasticsearch([app.config['ELASTICSEARCH_URL']]) \
         if 'ELASTICSEARCH_URL' in app.config else None
     
+    from .models import UserView, Role
+    from .views import api
+
     db.init_app(app)
     migrate.init_app(app, db)
     mongo_db.init_app(app)
     api.init_app(app)
     jwt_manager.init_app(app)
-
-
-    from .models import UserView, Role
-    from .views import (
-        user_ns, 
-        role_ns, 
-        auth_ns, 
-        dictionary_ns, 
-        domain_ns, 
-        terminology_ns,
-        search_ns
-    )
+    
 
     sentry_sdk.init(
         dsn=app.config['SENTRY_DSN'],
@@ -94,11 +64,12 @@ def create_app(test_config=None):
     def before_first_request():
         init_example_application(
             entity_record_manager=SQLAlchemyRecordManager(
-                record_class=IntegerSequencedItem,
+                record_class=IntegerSequencedWithIDRecord,
                 session=db.session,
             ),
 
         )
+
     with app.app_context() as ctx:
         db.create_all()
     

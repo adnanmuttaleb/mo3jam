@@ -1,7 +1,6 @@
 from eventsourcing.domain.model.aggregate import BaseAggregateRoot
 
-class ValueObject():
-    
+class ValueObject(): 
     @property
     def attrs(self):
         return (attr for attr in self.__dict__ if not callable(getattr(self, attr)) and not attr.startswith('__'))
@@ -39,7 +38,7 @@ class Terminology(BaseAggregateRoot):
     class Discarded(Event, BaseAggregateRoot.Discarded):
         pass
    
-    class DomainSet(Event):
+    class DomainChanged(Event):
         def mutate(self, obj):
             obj.domain = self.domain  
     
@@ -79,8 +78,8 @@ class Terminology(BaseAggregateRoot):
             data=data,
         ) 
     
-    def set_domain(self, domain):
-        self.__trigger_event__(Terminology.DomainSet, domain=domain)
+    def change_domain(self, domain):
+        self.__trigger_event__(Terminology.DomainChanged, domain=domain)
     
     def change_language(self, language):
         self.__trigger_event__(Terminology.LanguageChanged, language=language)
