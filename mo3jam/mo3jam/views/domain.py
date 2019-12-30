@@ -2,55 +2,41 @@ import uuid
 from dateutil.parser import parse as date_parser
 from datetime import datetime
 
-from eventsourcing.example.application import (
-    get_example_application, 
-)
-
 from flask import request, abort, current_app
 from flask_restplus import Resource, Namespace
-from flask_restplus.marshalling import marshal, marshal_with
 
-from ..entities import Domain
-from ..models import DomainView, UserView
-from ..serializers import domain_fields
-from ..utils import get_pagination_urls, roles_accepted, roles_required
+from mo3jam.models import DomainView, UserView
+from mo3jam.schemas import DomainSchema
+from mo3jam.utils import get_pagination_urls, roles_accepted, roles_required, get_json_schema
 
 domain_ns = Namespace('domains', description='Domain Endpoint',)
+domain_fields = domain_ns.schema_model(
+    'Domain',
+    get_json_schema(DomainSchema)
+)
 
 
 @domain_ns.route('/')
 class DomainList(Resource):
+    schema = DomainSchema()
     
     def get(self):
         response = {}
-        page = request.args.get('page', 1)
-        page_size = request.args.get('page_size', current_app.config['RESULTS_PER_PAGE']) 
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', current_app.config['RESULTS_PER_PAGE']))
         queryset = list(DomainView.objects[(page-1)*page_size:page*page_size])
-        response['domains'] = marshal(
-            queryset,
-            domain_fields,
-        )
+        response['domains'] = self.schema.dump(queryset, many=True)
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
 
-    @domain_ns.expect(domain_fields,)
+    @domain_ns.expect(domain_fields)
     def post(self):
-        
-        name = request.json['name']
-        description = request.json.get('description')
-        creator_id = uuid.UUID(request.json['creator'])
-        creation_date = datetime.now()
-
-        creator = UserView.objects.get(id=creator_id)
-
-        domain = Domain.__create__(
-            name=name,
-            description=description,
-            creator=creator.id, 
-            creation_date=creation_date,
+        data = self.schema.load(request.get_json())
+        domain = DomainView(
+            **data,
+            id=uuid.uuid4()
         )
-        domain.__save__()
-
+        domain.save()
         return '', 200
 
 
@@ -59,36 +45,25 @@ class DomainList(Resource):
     "domain_id": "Domain ID"
 })
 class DomainDetails(Resource):
-    
-    @marshal_with(domain_fields)
+    schema = DomainSchema()
+
     def get(self, domain_id):
-        return DomainView.objects.get_or_404(id=domain_id)
+        return self.schema.dump(DomainView.objects.get_or_404(id=domain_id))
     
-    @roles_accepted(['superuser', 'editor',])
     @domain_ns.expect(domain_fields)
-    def put(sef, domain_id):
-        
-        app = get_example_application()
-        domain = app.example_repository[uuid.UUID(domain_id)]
-
-        name = request.json.get('name')
-        description = request.json.get('description')
-
-        if name and name != domain.name:
-            domain.edit_name(name)
+    def put(self, domain_id):    
+        domain = DomainView.objects.get_or_404(id=domain_id)
+        data = self.schema.load(request.get_json())
+        if data['name'] != domain.name:
+            domain.edit_name(data['name'])
        
-        if description and description != domain.description:
-            domain.edit_description(description)
+        if data['description'] != domain.description:
+            domain.edit_description(data['description'])
 
-        domain.__save__()
-       
         return '', 200
 
     @roles_accepted(['superuser', 'editor',])
     def delete(self, domain_id):
-        app = get_example_application()
-        domain = app.example_repository[uuid.UUID(domain_id)]
-        domain.__discard__()
-        domain.__save__()
-
+        domain = DomainView.objects.get_or_404(id=domain_id)
+        domain.delete()
         return '', 204

@@ -1,4 +1,11 @@
+"""
+Currently this file is deprecated, and is kept for guidence purposes only.
+"""
+
+import uuid
+from datetime import datetime
 from eventsourcing.domain.model.aggregate import BaseAggregateRoot
+
 
 class ValueObject(): 
     @property
@@ -17,17 +24,16 @@ class Translation(ValueObject):
 
 class Terminology(BaseAggregateRoot):
     
-    def __init__(self, term, domain, creator, creation_date, *args, language='en', translations=None, **kwargs):
+    def __init__(self, term, domain, creator, creation_date, *args, language='en', translations=(), **kwargs):
         super(Terminology, self).__init__(*args, **kwargs)
         self.term = term
         self.domain = domain
         self.language = language
         self.creator = creator
         self.creation_date = creation_date
-        if not translations:
-            self.translations = ()
-        else:
-            self.translations = translations
+        self.translations = ()
+        for translation in translations:
+            self.add_translation(translation)
     
     class Event(BaseAggregateRoot.Event):
         pass
@@ -47,8 +53,14 @@ class Terminology(BaseAggregateRoot):
             obj.language = self.language  
 
     class TranslationAdded(Event):
+
         def mutate(self, obj):
-            obj.translations = (*obj.translations, self.translation)   
+            translation = Translation(
+                **self.translation,
+                id =uuid.uuid4(), 
+                creation_date=datetime.now(),          
+            )  
+            obj.translations = (*obj.translations, translation)   
 
     class TranslationDeleted(Event):
         def mutate(self, obj):

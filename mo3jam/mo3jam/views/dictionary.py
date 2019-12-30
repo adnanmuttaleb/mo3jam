@@ -1,47 +1,41 @@
-from dateutil.parser import parse as date_parser
 import uuid
 
-from flask import request, jsonify, abort, current_app
+from flask import request, abort, current_app
 from flask_restplus import Resource, Namespace
-from flask_restplus.marshalling import marshal, marshal_with
 
 from ..models import DictionaryView
-from ..serializers import dictionary_fields
-from ..utils import get_pagination_urls, roles_accepted, roles_required
+from mo3jam.schemas import DictionarySchema
+from ..utils import get_pagination_urls, roles_accepted, roles_required, get_json_schema
 
 dictionary_ns = Namespace('dictionaries', description="Dictionaries' API",)
+dictionary_fields = dictionary_ns.schema_model(
+    'Dictionary',
+    get_json_schema(DictionarySchema)
+)
+
 
 @dictionary_ns.route('/')
 class DictionaryList(Resource):
+    schema = DictionarySchema()
 
     def get(self):
         response = {}
-        page = request.args.get('page', 1)
-        page_size = request.args.get('page_size', current_app.config['RESULTS_PER_PAGE']) 
-        queryset = list(DictionaryView.objects[(page-1)*page_size:page*page_size])
-        response['dictionaries'] = marshal(
-            queryset,
-            dictionary_fields,
-        )
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', current_app.config['RESULTS_PER_PAGE'])) 
+        queryset = DictionaryView.objects[(page-1)*page_size:page*page_size]
+        response['dictionaries'] = self.schema.dump(queryset, many=True)
         response.update(get_pagination_urls(queryset, page, page_size))
         return response
-    
-    @dictionary_ns.expect(dictionary_fields)    
+       
+    @dictionary_ns.expect(dictionary_fields)
     def post(self):
-        
-        author = request.json['author']
-        title = request.json['title']
-        pub_date = date_parser(request.json['pub_date'])
-
+        data = self.schema.load(request.get_json())
         dictionary = DictionaryView(
             id=uuid.uuid4(),
-            author=author, 
-            title=title, 
-            publication_date=pub_date
+            **data
         )
-        
         dictionary.save()
-        return jsonify(dictionary)
+        return self.schema.dump(dictionary)
 
 
 @dictionary_ns.route('/<string:dict_id>')
@@ -49,29 +43,19 @@ class DictionaryList(Resource):
     "dict_id": 'ID of dictionary to be updated.'
 })
 class DictionaryDetails(Resource):
+    schema = DictionarySchema()
 
-    @marshal_with(dictionary_fields)
     def get(self, dict_id):
-        return DictionaryView.objects.get_or_404(id=dict_id)
+        return self.schema.dump(DictionaryView.objects.get_or_404(id=dict_id))
     
-    @roles_accepted(['superuser', 'editor',])
-    @dictionary_ns.expect(dictionary_fields,)    
+    @dictionary_ns.expect(dictionary_fields)
     def put(self, dict_id):
-
-        author = request.json['author']
-        title = request.json['title']
-        pub_date = date_parser(request.json['pub_date'])
-        
         dictionary = DictionaryView.objects.get_or_404(id=dict_id)
-        dictionary.update(
-            author=author, 
-            title=title,
-            publication_date=pub_date
-        )
+        data = self.schema.load(request.get_json())
+        dictionary.update(**data)
+        dictionary.reload()
+        return self.schema.dump(dictionary)
 
-        return '', 200
-
-    @roles_accepted(['superuser', 'editor',])
     def delete(self, dict_id):
         dictionary = DictionaryView.objects.get_or_404(id=dict_id)
         dictionary.delete()

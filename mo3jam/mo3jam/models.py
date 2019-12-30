@@ -1,7 +1,8 @@
 import functools
-import json
 import uuid
 import six
+
+from datetime import datetime
 
 from passlib.hash import pbkdf2_sha256 as sha256
 from mongoengine import signals
@@ -59,34 +60,47 @@ def register_signals(cls):
 
 
 class Source(mongo_db.Document):
-    id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
-    meta = {'allow_inheritance': True}
-
+    id = mongo_db.UUIDField(primary_key=True)
+    meta = {
+        'allow_inheritance': True
+    }
 
 class DictionaryView(Source):
     __searchable__ = ['author', 'title',]
-    author = mongo_db.StringField(max_length=400,)
+    id = mongo_db.UUIDField(primary_key=True)
+    author = mongo_db.ListField(mongo_db.StringField(max_length=400,))
     title = mongo_db.StringField(max_length=200, required=True)
     publication_date = mongo_db.DateTimeField()
 
-#should User be source
 
 class Role(mongo_db.Document):
-    id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
+    id = mongo_db.UUIDField(primary_key=True)
     name = mongo_db.StringField(max_length=80, unique=True)
     description = mongo_db.StringField(max_length=255)
 
 
+class GenericUser(mongo_db.Document):
+    id = mongo_db.UUIDField(primary_key=True)
+    meta = {
+        'allow_inheritance': True
+    }
+
+class UnRegisteredUser(GenericUser):
+    id = mongo_db.UUIDField(primary_key=True)
+    name = mongo_db.StringField(max_length=30, required=True, unique=True)
+    email = mongo_db.EmailField(required=True, unique=True)
+
+
 @register_signals
-class UserView(mongo_db.Document, SearchableMixin):
+class UserView(GenericUser, SearchableMixin):
     __indexname__ = 'users'
     __searchable__ = ['username']
-  
-    id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
+    
+    id = mongo_db.UUIDField(primary_key=True)
     username = mongo_db.StringField(max_length=30, required=True, unique=True)
     email = mongo_db.EmailField(required=True, unique=True)
     password = mongo_db.StringField(max_length=255)
-    active = mongo_db.BooleanField(default=True)
+    active = mongo_db.BooleanField(default=False)
     confirmed_at = mongo_db.DateTimeField()
     roles = mongo_db.ListField(mongo_db.ReferenceField(Role))
 
@@ -102,12 +116,20 @@ class UserView(mongo_db.Document, SearchableMixin):
 class TranslationView(mongo_db.EmbeddedDocument):
     __searchable__ = ['value']
 
-    id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
-    value = mongo_db.StringField(max_length=200, required=True)
-    author = mongo_db.GenericReferenceField()
-    creator = mongo_db.ReferenceField(UserView)
-    creation_date = mongo_db.DateTimeField()
-    notes = mongo_db.StringField(max_length=2000, required=True)
+    id = mongo_db.UUIDField(primary_key=True)
+    value = mongo_db.StringField(max_length=50, required=True)
+    creator = mongo_db.ReferenceField(UserView, required=True,)
+    author = mongo_db.ReferenceField(GenericUser)
+    source = mongo_db.ReferenceField(Source)
+    creation_date = mongo_db.DateTimeField(default=datetime.now)
+    notes = mongo_db.StringField(max_length=2000)
+
+
+class Note(mongo_db.EmbeddedDocument):
+    id = mongo_db.UUIDField(primary_key=True)
+    value = mongo_db.StringField(max_length=500, required=True)
+    creation_date = mongo_db.DateTimeField(default=datetime.now)
+    creator = mongo_db.ReferenceField(UserView, required=True)
 
 
 @register_signals
@@ -115,14 +137,66 @@ class TerminologyView(mongo_db.Document, SearchableMixin):
     __indexname__ = 'terminologies'
     __searchable__ = ['term', 'creation_date', 'creator', 'translations', 'language', 'notes']
 
-    id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
+    id = mongo_db.UUIDField(primary_key=True)
     term = mongo_db.StringField(max_length=300, required=False, unique=True, sparse=True)
     language = mongo_db.StringField(max_length=30, required=False, default='en')
     translations = mongo_db.EmbeddedDocumentListField(TranslationView, required=False)
-    notes = mongo_db.ListField(mongo_db.StringField(max_length=2000), required=False)
+    notes = mongo_db.EmbeddedDocumentListField(Note, required=False)
     domain = mongo_db.ReferenceField('DomainView', required=True)
     creator = mongo_db.ReferenceField(UserView)
-    creation_date = mongo_db.DateTimeField()
+    creation_date = mongo_db.DateTimeField(default=datetime.now)
+
+    def add_translation(self, value, creator, notes="", source=None, author=None):
+        if source == None and author == None:
+            raise Exception("A translation object must has either a source or an author") 
+
+        translation = TranslationView(
+            id=uuid.uuid4(),
+            value=value,
+            creator=creator, 
+            notes=notes,
+            source=source,
+            author=author,
+        )
+        self.update(
+            push__translations=translation,
+        )
+        return translation
+
+    def delete_translation(self, id):
+        self.update(
+            pull__translations=self.translations.get(id=id)
+        )
+
+    def update_translation(self, id, data):
+        self.translations.filter(id=id).update(
+            **data,     
+        )
+        self.save()
+
+    def change_language(self, language):
+        self.update(language=language)
+    
+    def change_domain(self, domain):
+        self.update(domain=domain)
+    
+    def add_note(self, value, creator):
+        note = Note(
+            id=uuid.uuid4(),
+            value=value,
+            creator=creator, 
+        )
+        self.update(push__notes=note)
+        return note
+    
+    def edit_note(self, id, value, **kwargs):
+        self.notes.filter(id=id).update(
+            value=value,     
+        )
+        self.save()
+    
+    def delete_note(self, id):
+        self.update(pull__notes=self.notes.get(id=id))
 
 
 @register_signals
@@ -130,140 +204,14 @@ class DomainView(mongo_db.Document, SearchableMixin):
     __indexname__ = 'domains'
     __searchable__ = ['name', 'creation_date', 'creator', 'description']
     
-    id = mongo_db.UUIDField(max_length=300, required=True, primary_key=True)
+    id = mongo_db.UUIDField(primary_key=True)
     name = mongo_db.StringField(max_length=200)
     description = mongo_db.StringField(max_length=2000)
     creator = mongo_db.ReferenceField(UserView)
-    creation_date = mongo_db.DateTimeField()
+    creation_date = mongo_db.DateTimeField(default=datetime.now)
 
+    def edit_name(self, name):
+        self.update(name=name)
 
-@subscribe_to(
-    Terminology.Created, 
-    Terminology.TranslationAdded, 
-    Terminology.TranslationDeleted,
-    Terminology.TranslationUpdated,
-    Terminology.DomainChanged, 
-    Terminology.LanguageChanged, 
-    Terminology.Discarded,
-    Domain.Created,
-    Domain.NameChanged,
-    Domain.DescriptionChanged,
-    Domain.Discarded
-)
-@functools.singledispatch
-def consume(event):
-    raise TypeError('Unknown Event Type: {}'.format(type(event)))
-
-@consume.register(Terminology.Created)
-def _(event):
-
-    terminology = TerminologyView(
-        id=event.originator_id, 
-        term=event.term,
-        domain=event.domain,
-        language=event.language,
-        creator=event.creator,
-        creation_date=event.creation_date,
-        
-    )
-
-    terminology.save()
-
-@consume.register(Terminology.DomainChanged)
-def _(event):
-    terminology = TerminologyView.objects.get(id=event.originator_id)
-    domain = DomainView.objects.get(id=event.domain)
-    terminology.update(domain=domain)
-
-@consume.register(Terminology.LanguageChanged)
-def _(event):
-    terminology = TerminologyView.objects.get(id=event.originator_id)
-    terminology.update(language=event.language)
-
-@consume.register(Terminology.TranslationAdded,)
-def _(event):
-
-    trans_id = event.translation.id
-    value = event.translation.value
-    creator = UserView.objects(id=event.translation.creator).first()
-    author = DictionaryView.objects(id=event.translation.author).first() or UserView.objects(id=event.translation.author).first()
-    creation_date = event.translation.creation_date
-    notes = event.translation.notes
-
-    translation = TranslationView(
-        id=trans_id,
-        value=value, 
-        creator=creator, 
-        author=author, 
-        creation_date=creation_date,
-        notes=notes
-    )
-
-    TerminologyView.objects(id=event.originator_id).update_one(
-        push__translations=translation,
-    )
-
-@consume.register(Terminology.TranslationDeleted,)
-def _(event):
-    try:
-        trans_id = uuid.UUID(event.translation_id)
-    except Exception:
-        trans_id = event.translation_id
-
-    TerminologyView.objects(id=event.originator_id).update_one(
-        pull__translations=TerminologyView.objects(
-            id=event.originator_id
-        ).first().translations.get(id=trans_id)
-    )
-
-@consume.register(Terminology.TranslationUpdated,)
-def _(event):
-    try:
-        trans_id = uuid.UUID(event.translation_id)
-    except Exception:
-        trans_id = event.translation_id
-    
-    update_data = dict(event.data)
-    update_data['author'] = DictionaryView.objects(id=update_data['author']).first() or \
-                            UserView.objects(id=update_data['author']).first()
-
-    terminology = TerminologyView.objects.get(id=event.originator_id)
-    terminology.translations.filter(id=trans_id).update(
-        **update_data,     
-    )
-    terminology.save()
-
-
-@consume.register(Terminology.Discarded)
-def _(event):
-    terminology = TerminologyView.objects(id=event.originator_id).first()
-    terminology.delete()
-
-
-@consume.register(Domain.Created)
-def _(event):
-    domain = DomainView(
-        id=event.originator_id,
-        name=event.name,
-        description=event.description,
-        creator=event.creator,
-        creation_date=event.creation_date
-    )
-
-    domain.save()
-
-@consume.register(Domain.NameChanged)
-def _(event):
-    DomainView.objects(id=event.originator_id).update_one(name=event.name)
-    
-
-@consume.register(Domain.DescriptionChanged)
-def _(event):
-    DomainView.objects(id=event.originator_id).update_one(description=event.description)
-
-
-@consume.register(Domain.Discarded)
-def _(event):
-    domain = DomainView.objects(id=event.originator_id).first()
-    domain.delete()
-    
+    def edit_description(self, description):
+        self.update(description=description)

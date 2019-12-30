@@ -2,6 +2,7 @@ from flask_restplus import Api
 
 from .domain import domain_ns
 from .user import user_ns
+from .unregistred_user import user_ns as unregistred_user_ns
 from .terminology import terminology_ns
 from .dictionary import dictionary_ns
 from .search import search_ns
@@ -13,6 +14,7 @@ api = Api(title='Mo3jam API', version="1.0", doc='/api/v1.0/docs', prefix='/api/
 
 api.add_namespace(domain_ns)
 api.add_namespace(user_ns)
+api.add_namespace(unregistred_user_ns)
 api.add_namespace(terminology_ns)
 api.add_namespace(dictionary_ns)
 api.add_namespace(search_ns)

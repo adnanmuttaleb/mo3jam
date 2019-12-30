@@ -1,13 +1,7 @@
 import sentry_sdk
 from flask import Flask
 from flask_jwt_extended import JWTManager
-from eventsourcing.example.application import (
-    init_example_application
-)
-from eventsourcing.infrastructure.sqlalchemy.manager import (
-    SQLAlchemyRecordManager,
-)
-from eventsourcing.infrastructure.sqlalchemy.records import IntegerSequencedWithIDRecord
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_mongoengine import MongoEngine
@@ -42,7 +36,6 @@ def create_app(test_config=None):
     mongo_db.init_app(app)
     api.init_app(app)
     jwt_manager.init_app(app)
-    
 
     sentry_sdk.init(
         dsn=app.config['SENTRY_DSN'],
@@ -62,16 +55,7 @@ def create_app(test_config=None):
 
     @app.before_first_request
     def before_first_request():
-        init_example_application(
-            entity_record_manager=SQLAlchemyRecordManager(
-                record_class=IntegerSequencedWithIDRecord,
-                session=db.session,
-            ),
-
-        )
-
-    with app.app_context() as ctx:
-        db.create_all()
+        pass
     
     return app
     

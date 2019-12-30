@@ -47,7 +47,6 @@ class Login(Resource):
 
 @auth_ns.route('/refresh', methods=['POST'])
 class Refresh(Resource):
-    
     @jwt_refresh_token_required
     def post(self):
         current_user = get_jwt_identity()
@@ -60,7 +59,6 @@ class Refresh(Resource):
 
 @auth_ns.route('/logout', methods=['DELETE'])
 class RevokeToken(Resource):
-
     @jwt_required
     def delete(self):
         jti = get_raw_jwt()['jti']
