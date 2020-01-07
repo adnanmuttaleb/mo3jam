@@ -1,0 +1,66 @@
+version: '3.7'
+
+services:
+  app:
+    build: ./mo3jam
+    command: gunicorn --bind 0.0.0.0:5000 'mo3jam:create_app()'
+    volumes:
+      - ./mo3jam:/app
+    env_file:
+      - ./.env.dev
+    depends_on:
+      - mo3jamdb
+      - es01
+    networks: 
+      - backend
+      - frontend
+  
+  mo3jamdb:
+    image: mongo
+    container_name: mo3jamdb
+    environment:
+      MONGO_INITDB_DATABASE: mo3jam
+    networks: 
+      - backend
+
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.5.1
+    container_name: es01
+    environment:
+      - node.name=es01
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - backend
+
+  webserver:
+    build: ./nginx
+    container_name: webserver
+    restart: unless-stopped
+    environment:
+      APP_ENV: "dev"
+      APP_NAME: "webserver"
+      APP_DEBUG: "true"
+      SERVICE_NAME: "webserver"
+    ports:
+      - "5000:80"
+      - "443:443"
+    volumes:
+      - nginxdata:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - frontend
+  
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge
+
+volumes:
+  nginxdata:
+    driver: local

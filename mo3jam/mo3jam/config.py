@@ -1,15 +1,17 @@
-SQLALCHEMY_TRACK_MODIFICATIONS = False
+import os
+
 SECRET_KEY = 'dev'
-SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/mo3jam.db'
-MONGODB_SETTINGS = {
-    'db': 'mo3jam',
-    'host': 'localhost',
-    'port': 27017,
 
-}
+MONGODB_DB = os.getenv('DATABASE_NAME', 'mo3jam')
+MONGODB_HOST = os.getenv('DATABASE_HOST', 'localhost')
+MONGODB_PORT = int(os.getenv('DATABASE_PORT', 27017))
+MONGODB_USERNAME = os.getenv('DATABASE_USER')
+MONGODB_PASSWORD = os.getenv('DATABASE_PASS')
+MONGODB_CONNECT = False
+MONGO_AUTH_SOURCE = 'admin'
 
-
-ELASTICSEARCH_URL = "http://localhost:9200"
+ELASTICSEARCH_HOST = os.getenv('ES_HOST', 'localhost')
+ELASTICSEARCH_URL = "{}:9200".format(ELASTICSEARCH_HOST)
 RESULTS_PER_PAGE = 20
 
 SENTRY_DSN = "https://279b767a15ac40dc9ef3aee616d79adb@sentry.io/1797633"

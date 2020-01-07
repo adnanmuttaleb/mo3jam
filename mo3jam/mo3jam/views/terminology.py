@@ -9,7 +9,7 @@ from mo3jam.models import TerminologyView
 from mo3jam.utils import (
     get_pagination_urls, 
     roles_accepted, roles_required, 
-    get_records, get_spreadsheet, get_json_schema
+    get_json_schema
 )
 
 terminology_ns = Namespace('terminologies', description='Terminology Endpoint',)
@@ -44,6 +44,8 @@ class TerminologyList(Resource):
     
     def _post(slef, data):
         translations = []
+        notes = []
+         
         if 'translations' in data:
             translations = data.pop('translations')
         
