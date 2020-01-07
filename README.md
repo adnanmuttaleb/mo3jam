@@ -1,4 +1,4 @@
-# mo3jam
+# Mo3jam
 
 Mo3jam is field specific community dictionary, currently under developmet. Both `docker` and manuall installation are 
 supported.
