@@ -1,0 +1,28 @@
+
+syntax = "proto3";
+
+service Search {
+    rpc search (SearchQuery) returns (SearchResultSet) {}
+    rpc autocomplete (SearchQuery) returns (AutoCompleteResultSet) {}
+}
+  
+message SearchQuery {
+    string query = 1;
+}
+
+message SearchResultSet {
+    repeated SearchResult results = 1;
+}
+
+message SearchResult {
+    string match = 1;
+}
+
+message AutoCompleteResultSet {
+    repeated AutoCompleteResult results = 1;
+}
+
+message AutoCompleteResult {
+    string match = 1;
+    string translation = 2;
+}
